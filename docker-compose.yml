@@ -1,0 +1,75 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: depshield
+      POSTGRES_USER: depshield
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-local-development-only}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U depshield -d depshield"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [private]
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://depshield:${POSTGRES_PASSWORD:-local-development-only}@db:5432/depshield
+      OLLAMA_BASE_URL: ${OLLAMA_DOCKER_URL:-http://ollama:11434}
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    ports: ["127.0.0.1:8000:8000"]
+    depends_on:
+      db: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live')"]
+      interval: 15s
+      timeout: 4s
+      retries: 5
+    networks: [private]
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://depshield:${POSTGRES_PASSWORD:-local-development-only}@db:5432/depshield
+      OLLAMA_BASE_URL: ${OLLAMA_DOCKER_URL:-http://ollama:11434}
+    command: python -m app.workers.scan_worker
+    depends_on:
+      api: {condition: service_healthy}
+    networks: [private]
+
+  frontend:
+    build: ./frontend
+    ports: ["127.0.0.1:5173:80"]
+    depends_on:
+      api: {condition: service_healthy}
+    networks: [private]
+
+  mailpit:
+    image: axllent/mailpit:v1.22
+    profiles: [mail]
+    ports: ["127.0.0.1:8025:8025"]
+    networks: [private]
+
+  ollama:
+    image: ollama/ollama:latest
+    profiles: [ai]
+    volumes: [ollama_data:/root/.ollama]
+    ports: ["127.0.0.1:11434:11434"]
+    networks: [private]
+
+volumes:
+  postgres_data:
+  ollama_data:
+
+networks:
+  private:
+    driver: bridge

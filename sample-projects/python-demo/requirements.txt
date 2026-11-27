@@ -1,0 +1,4 @@
+# EDUCATIONAL FIXTURE ONLY: Django 4.2.4 is in the affected range for PYSEC-2023-225.
+# Do not install this sample dependency.
+Django==4.2.4
+requests>=2.31,<3

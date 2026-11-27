@@ -1,0 +1,2 @@
+-- No fake users, projects, vulnerabilities, or scan metrics are seeded.
+-- Use sample-projects/ manifests for a clearly labelled educational scan.
